@@ -14,7 +14,7 @@
     MoreVertical,
     Edit3,
     Github,
-    Wrap
+    WrapText
   } from 'lucide-svelte';
   import { appStore, activeDocument } from './stores';
   import type { Document } from './stores';
@@ -279,7 +279,7 @@
     
     <div class="header-actions">
       <button class="btn btn-icon" on:click={() => appStore.toggleWordWrap()} title="Toggle word wrap (Ctrl+W)">
-        <Wrap size={18} />
+        <WrapText size={18} />
       </button>
       
       <button class="btn btn-icon" on:click={handleDownload} title="Download markdown (Ctrl+S)">
