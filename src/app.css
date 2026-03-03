@@ -1,0 +1,724 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ============================================
+   DESIGN TOKENS & VARIABLES
+   ============================================ */
+
+:root {
+  /* Light Mode - Clean, Sexy, Modern */
+  --bg-app: #F5F5F3;
+  --bg-surface: #FFFFFF;
+  --bg-sidebar: #EBEBE9;
+  --bg-active-tab: #FFFFFF;
+  --bg-inactive-tab: transparent;
+  --bg-hover: #F0F0EE;
+  
+  /* Typography */
+  --text-primary: #171717;
+  --text-secondary: #737373;
+  --text-tertiary: #A3A3A3;
+  
+  /* Accents */
+  --accent-primary: #007AFF;
+  --accent-hover: #0062CC;
+  --accent-secondary: #34C759;
+  --border-subtle: #E5E5E5;
+  --border-focus: #007AFF;
+  
+  /* Code - Light */
+  --code-bg: #F3F4F6;
+  --code-text: #1F2937;
+  --code-keyword: #D946EF;
+  --code-function: #3B82F6;
+  --code-string: #10B981;
+  --code-comment: #9CA3AF;
+  --code-number: #F59E0B;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 24px rgba(0,0,0,0.08);
+  
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dark Mode - Premium, Luxurious */
+.dark-mode {
+  --bg-app: #050505;
+  --bg-surface: #0A0A0A;
+  --bg-sidebar: #050505;
+  --bg-active-tab: #121212;
+  --bg-inactive-tab: transparent;
+  --bg-hover: #1A1A1A;
+  
+  --text-primary: #E5E5E5;
+  --text-secondary: #A3A3A3;
+  --text-tertiary: #525252;
+  
+  --accent-primary: #D97706;
+  --accent-hover: #B45309;
+  --accent-secondary: #10B981;
+  --border-subtle: #262626;
+  --border-focus: #D97706;
+  
+  /* Code - Dark */
+  --code-bg: #121212;
+  --code-text: #E5E5E5;
+  --code-keyword: #F43F5E;
+  --code-function: #FBBF24;
+  --code-string: #34D399;
+  --code-comment: #6B7280;
+  --code-number: #F97316;
+  
+  /* Shadows with amber glow */
+  --shadow-sm: 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-lg: 0 0 30px rgba(217, 119, 6, 0.1);
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* Transition for theme switching */
+body, body * {
+  transition: background-color var(--transition-slow),
+              color var(--transition-slow),
+              border-color var(--transition-slow),
+              box-shadow var(--transition-slow);
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-subtle);
+  border-radius: 10px;
+  border: 2px solid var(--bg-surface);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================
+   MARKDOWN TYPOGRAPHY (Preview Pane)
+   ============================================ */
+
+.markdown-preview {
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text-primary);
+  line-height: 1.8;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2em;
+  margin-bottom: 0.8em;
+  color: var(--text-primary);
+}
+
+.markdown-preview h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.3em;
+}
+
+.markdown-preview h2 {
+  font-size: 1.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.3em;
+}
+
+.markdown-preview h3 {
+  font-size: 1.375rem;
+}
+
+.markdown-preview h4 {
+  font-size: 1.125rem;
+}
+
+.markdown-preview h5 {
+  font-size: 1rem;
+}
+
+.markdown-preview h6 {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.markdown-preview p {
+  margin-bottom: 1.2em;
+}
+
+.markdown-preview a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--transition-fast);
+}
+
+.markdown-preview a:hover {
+  border-bottom-color: var(--accent-primary);
+}
+
+.markdown-preview strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-preview em {
+  font-style: italic;
+}
+
+.markdown-preview del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Lists */
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 1.2em;
+  padding-left: 2em;
+}
+
+.markdown-preview ul {
+  list-style-type: disc;
+}
+
+.markdown-preview ul ul {
+  list-style-type: circle;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview ol {
+  list-style-type: decimal;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.4em;
+}
+
+.markdown-preview li > p {
+  margin-bottom: 0.5em;
+}
+
+/* Task Lists */
+.markdown-preview ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.markdown-preview .task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.markdown-preview .task-list-item input[type="checkbox"] {
+  margin-top: 0.3em;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* Blockquotes */
+.markdown-preview blockquote {
+  border-left: 4px solid var(--accent-primary);
+  padding-left: 1.2em;
+  margin: 1.5em 0;
+  color: var(--text-secondary);
+  font-style: italic;
+  background: linear-gradient(90deg, var(--bg-hover) 0%, transparent 100%);
+  padding: 1em 1em 1em 1.2em;
+  border-radius: 0 8px 8px 0;
+}
+
+.markdown-preview blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview blockquote blockquote {
+  margin: 1em 0;
+  opacity: 0.9;
+}
+
+/* Code */
+.markdown-preview code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875em;
+  background-color: var(--code-bg);
+  color: var(--code-text);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.markdown-preview pre {
+  background-color: var(--code-bg);
+  padding: 1.2em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1.5em 0;
+  position: relative;
+}
+
+.markdown-preview pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  display: block;
+}
+
+/* Syntax Highlighting - Light Mode */
+.markdown-preview .hljs-keyword,
+.markdown-preview .hljs-selector-tag,
+.markdown-preview .hljs-addition {
+  color: var(--code-keyword);
+}
+
+.markdown-preview .hljs-string,
+.markdown-preview .hljs-regexp,
+.markdown-preview .hljs-attribute {
+  color: var(--code-string);
+}
+
+.markdown-preview .hljs-number,
+.markdown-preview .hljs-literal {
+  color: var(--code-number);
+}
+
+.markdown-preview .hljs-function,
+.markdown-preview .hljs-title,
+.markdown-preview .hljs-built_in {
+  color: var(--code-function);
+}
+
+.markdown-preview .hljs-comment,
+.markdown-preview .hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+/* Tables */
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.9375rem;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  padding: 0.75em 1em;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.markdown-preview th {
+  background-color: var(--bg-hover);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-preview tr:nth-child(even) {
+  background-color: var(--bg-hover);
+}
+
+.markdown-preview tr:hover {
+  background-color: var(--bg-sidebar);
+}
+
+/* Horizontal Rule */
+.markdown-preview hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+  margin: 2.5em 0;
+}
+
+/* Images */
+.markdown-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  margin: 1.5em 0;
+}
+
+/* Definition Lists */
+.markdown-preview dl {
+  margin: 1.5em 0;
+}
+
+.markdown-preview dt {
+  font-weight: 600;
+  margin-top: 1em;
+}
+
+.markdown-preview dd {
+  margin-left: 2em;
+  color: var(--text-secondary);
+}
+
+/* Footnotes */
+.markdown-preview .footnotes {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 2em;
+  padding-top: 1em;
+}
+
+.markdown-preview .footnotes ol {
+  padding-left: 1.5em;
+}
+
+.markdown-preview .footnote-backref {
+  font-size: 0.8em;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-up {
+  animation: fadeUp 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ============================================
+   EDITOR STYLES
+   ============================================ */
+
+.editor-textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 1.5em;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+.editor-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Line Numbers */
+.line-numbers {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-tertiary);
+  text-align: right;
+  padding: 1.5em 0.75em 1.5em 1em;
+  user-select: none;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  min-width: 3.5em;
+}
+
+/* ============================================
+   TAB STYLES
+   ============================================ */
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 1em;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-inactive-tab);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--bg-active-tab);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-primary);
+}
+
+.tab .tab-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab .tab-close {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all var(--transition-fast);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-left: 0.25em;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.tab .tab-close:hover {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.5em 1em;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  color: white;
+}
+
+.btn-icon {
+  padding: 0.5em;
+  width: 36px;
+  height: 36px;
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+/* Dark mode premium button effect */
+.dark-mode .btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 20px rgba(217, 119, 6, 0.3);
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass {
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Resizer */
+.resizer {
+  width: 4px;
+  background: var(--border-subtle);
+  cursor: col-resize;
+  transition: background var(--transition-fast);
+  position: relative;
+}
+
+.resizer:hover,
+.resizer.active {
+  background: var(--accent-primary);
+}
+
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 32px;
+  background: transparent;
+}
+
+/* Focus visible styles */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.dark-mode ::selection {
+  background: var(--accent-primary);
+  color: #000;
+}
