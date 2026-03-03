@@ -56,14 +56,28 @@
   };
 
   function renderGitHubAlert(text: string): string | null {
-    const alertRegex = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n?/i;
-    const match = text.match(alertRegex);
+    // The text may come wrapped in <p> tags from marked's paragraph processing
+    // Extract the actual text content, handling both plain text and HTML-wrapped text
+    let cleanText = text;
+    
+    // Remove wrapping <p> tags if present
+    if (cleanText.startsWith('<p>') && cleanText.endsWith('</p>')) {
+      cleanText = cleanText.slice(3, -4);
+    }
+    
+    // Check for GitHub Alert syntax: [!TYPE]
+    const alertRegex = /^\[! (NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>\s*|\n\s*)?/i;
+    const match = cleanText.match(alertRegex);
     
     if (match) {
       const type = match[1].toUpperCase();
       const alert = alertTypes[type];
       if (alert) {
-        const content = text.slice(match[0].length).trim();
+        let content = cleanText.slice(match[0].length).trim();
+        
+        // Remove trailing </p> if it was split
+        content = content.replace(/<\/p>\s*$/i, '');
+        
         return `<div class="markdown-alert ${alert.className}">
           <div class="markdown-alert-header">
             ${alert.icon}
@@ -75,7 +89,7 @@
     }
     return null;
   }
-  
+
   // ============================================
   // COLOR PREVIEW RENDERER
   // ============================================
