@@ -62,39 +62,9 @@ This is a **modern**, _fluid_ markdown editor with full GitHub Flavored Markdown
 
 - ✅ Full GFM support (tables, task lists, strikethrough)
 - ✅ Syntax highlighting for code blocks
-- ✅ **GitHub Alerts** - Beautiful alert blocks
-- ✅ **Color Previews** - See colors inline
 - ✅ Multiple tabs
 - ✅ Light & Dark themes
 - ✅ Everything auto-saved to localStorage
-
-## GitHub Alerts
-
-> [!NOTE]
-> Useful information that users should know, even when skimming content.
-
-> [!TIP]
-> Helpful advice for doing things better or more easily.
-
-> [!IMPORTANT]
-> Key information users need to know to achieve their goal.
-
-> [!WARNING]
-> Urgent info that needs immediate user attention to avoid problems.
-
-> [!CAUTION]
-> Advises about risks or negative outcomes of certain actions.
-
-## Color Preview
-
-Use HEX, RGB, or HSL colors anywhere and see them rendered:
-
-- Primary color: **#007AFF** (blue)
-- Success color: **#34C759** (green)
-- Warning color: **rgb(255, 149, 0)** (orange)
-- Danger color: **hsl(0, 84%, 60%)** (red)
-
-Perfect for design documentation!
 
 ## Try It Out
 
@@ -115,15 +85,12 @@ console.log(greet('World'));
 | GFM Support | ✅ | Complete |
 | Syntax Highlight | ✅ | 100+ languages |
 | Themes | ✅ | Light & Dark |
-| GitHub Alerts | ✅ | 5 alert types |
-| Color Previews | ✅ | HEX, RGB, HSL |
 
 ### Task List
 
 - [x] Create awesome editor
 - [x] Add smooth animations
-- [x] Add GitHub Alerts
-- [x] Add Color Previews
+- [ ] Write documentation
 - [ ] Share with friends
 
 > "Simplicity is the ultimate sophistication." - Leonardo da Vinci

@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- GitHub Flavored Markdown Alerts support - Render beautiful alert blocks with `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, and `> [!CAUTION]`
-- Color preview feature - HEX, RGB, and HSL color codes are automatically rendered with a visual color circle preview
-
 ## [1.0.1] - 2025-03-03
 
 ### Added
