@@ -262,9 +262,12 @@ body, body * {
 }
 
 .markdown-preview .task-list-item input[type="checkbox"] {
-  margin-top: 0.3em;
+  margin-top: 0.15em;
   accent-color: var(--accent-primary);
   cursor: pointer;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
 }
 
 /* Blockquotes */
