@@ -268,6 +268,7 @@ function createDocumentStore() {
         activeDocumentId: newDoc.id,
         theme: 'light',
         sidebarWidth: 50,
+        wordWrap: true,
       });
     },
   };
