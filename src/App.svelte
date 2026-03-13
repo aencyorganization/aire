@@ -16,7 +16,20 @@
     MoreVertical,
     Edit3,
     Github,
-    WrapText
+    WrapText,
+    Search,
+    Upload,
+    History,
+    Cloud,
+    FileUp,
+    FileDown,
+    Bold,
+    Italic,
+    Code,
+    Link,
+    Heading,
+    List,
+    Quote
   } from 'lucide-svelte';
   import { appStore, activeDocument } from './stores';
   import type { Document } from './stores';
@@ -196,13 +209,37 @@
   let caretLine = 1;
   let caretCol = 1;
   let flashCopyStats = false;
+  let showSearchPanel = false;
+  let searchQuery = '';
+  let replaceQuery = '';
+  let showHistoryPanel = false;
+  let showSyncPanel = false;
+  let gistToken = '';
+  let gistId = '';
+  let gistStatus = '';
+  let importInputEl: HTMLInputElement | null = null;
+  let workspaceNameDraft = '';
+  let isEditorDragOver = false;
 
   const editorStateByDoc = new Map<string, { selectionStart: number; selectionEnd: number; scrollTop: number }>();
   const previewScrollByDoc = new Map<string, number>();
   
   $: currentDoc = $activeDocument;
+  $: visibleDocuments = $appStore.documents.filter((doc) => doc.workspaceId === $appStore.activeWorkspaceId);
+  $: activeWorkspace = $appStore.workspaces.find((workspace) => workspace.id === $appStore.activeWorkspaceId) || null;
   $: renderedMarkdown = currentDoc ? marked.parse(currentDoc.content) : '';
   $: lineCount = currentDoc ? currentDoc.content.split('\n').length : 1;
+  $: documentHistory = currentDoc ? (($appStore.historyByDoc[currentDoc.id] || []).slice().reverse()) : [];
+  $: searchResults = searchQuery.trim()
+    ? $appStore.documents
+        .filter((doc) => doc.content.toLowerCase().includes(searchQuery.toLowerCase()) || doc.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          workspace: $appStore.workspaces.find((workspace) => workspace.id === doc.workspaceId)?.name || 'Unknown',
+          matches: (doc.content.match(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length,
+        }))
+    : [];
   $: 
     if ($appStore) {
       sidebarWidth = $appStore.sidebarWidth;
@@ -255,7 +292,15 @@
     { id: 'toggle-theme', label: 'Toggle theme', desc: 'Light/Dark', run: () => appStore.toggleTheme() },
     { id: 'toggle-wrap', label: 'Toggle word wrap', desc: 'Wrap editor lines', run: () => appStore.toggleWordWrap() },
     { id: 'focus-editor', label: 'Focus editor', desc: 'Move caret to editor', run: () => editorTextarea?.focus() },
+    { id: 'search', label: 'Global search', desc: 'Search across documents', run: () => (showSearchPanel = true) },
+    { id: 'history', label: 'Version history', desc: 'Restore previous snapshots', run: () => (showHistoryPanel = true) },
+    { id: 'export-html', label: 'Export HTML', desc: 'Save rendered document as HTML', run: handleExportHtml },
+    { id: 'export-pdf', label: 'Export PDF', desc: 'Print rendered document to PDF', run: handleExportPdf },
   ];
+
+  function escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 
   // Palette helpers
   function openPalette() {
@@ -603,6 +648,176 @@
     flashDownload = true;
     setTimeout(() => (flashDownload = false), 420);
   }
+
+  function buildExportHtml(content: string, title: string) {
+    const previewHtml = marked.parse(content);
+    return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title><style>body{font-family:Inter,system-ui,sans-serif;margin:2rem;color:#111}main{max-width:860px;margin:0 auto}pre{background:#f4f4f4;padding:1rem;border-radius:8px;overflow:auto}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.5rem}.callout{border-left:4px solid #4f46e5;padding:.75rem 1rem;background:#f8f8ff}@media print{body{margin:0.5in}}</style></head><body><main>${previewHtml}</main></body></html>`;
+  }
+
+  function handleExportHtml() {
+    if (!currentDoc) return;
+    const html = buildExportHtml(currentDoc.content, currentDoc.name);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentDoc.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    announce('HTML exported');
+  }
+
+  function handleExportPdf() {
+    if (!currentDoc) return;
+    const html = buildExportHtml(currentDoc.content, currentDoc.name);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 200);
+    announce('PDF export opened');
+  }
+
+  function handleReplaceAll() {
+    if (!searchQuery.trim()) return;
+    const regex = new RegExp(escapeRegExp(searchQuery), 'gi');
+    for (const doc of $appStore.documents) {
+      if (!doc.content.match(regex)) continue;
+      appStore.updateDocumentContent(doc.id, doc.content.replace(regex, replaceQuery));
+    }
+    announce('Replace applied across documents');
+  }
+
+  function jumpToSearchResult(docId: string) {
+    const target = $appStore.documents.find((doc) => doc.id === docId);
+    if (!target) return;
+    appStore.setActiveWorkspace(target.workspaceId);
+    appStore.setActiveDocument(target.id);
+    showSearchPanel = false;
+  }
+
+  function wrapSelection(prefix: string, suffix = prefix, placeholder = 'text') {
+    if (!currentDoc || !editorTextarea) return;
+    const start = editorTextarea.selectionStart ?? 0;
+    const end = editorTextarea.selectionEnd ?? 0;
+    const selected = currentDoc.content.slice(start, end) || placeholder;
+    const updated = `${currentDoc.content.slice(0, start)}${prefix}${selected}${suffix}${currentDoc.content.slice(end)}`;
+    appStore.updateDocumentContent(currentDoc.id, updated);
+    tick().then(() => {
+      const newStart = start + prefix.length;
+      const newEnd = newStart + selected.length;
+      editorTextarea.focus();
+      editorTextarea.selectionStart = newStart;
+      editorTextarea.selectionEnd = newEnd;
+      handleSelectionChange();
+    });
+  }
+
+  function handleImportFiles(e: Event) {
+    const input = e.target as HTMLInputElement | null;
+    const files = Array.from(input?.files || []);
+    if (files.length === 0) return;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        appStore.createDocument(file.name.replace(/\.md$/i, ''), String(reader.result || ''));
+      };
+      reader.readAsText(file);
+    });
+    if (input) input.value = '';
+    announce(`${files.length} file(s) imported`);
+  }
+
+  function handleDropImport(e: DragEvent) {
+    e.preventDefault();
+    isEditorDragOver = false;
+    const files = Array.from(e.dataTransfer?.files || []).filter((file) => file.name.toLowerCase().endsWith('.md'));
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        appStore.createDocument(file.name.replace(/\.md$/i, ''), String(reader.result || ''));
+      };
+      reader.readAsText(file);
+    });
+    if (files.length > 0) announce(`${files.length} markdown file(s) imported`);
+  }
+
+  function createWorkspace() {
+    const name = workspaceNameDraft.trim() || `Workspace ${$appStore.workspaces.length + 1}`;
+    appStore.createWorkspace(name);
+    workspaceNameDraft = '';
+    announce(`Workspace ${name} created`);
+  }
+
+  function handleWorkspaceChange(e: Event) {
+    const target = e.target as HTMLSelectElement | null;
+    if (!target) return;
+    appStore.setActiveWorkspace(target.value);
+  }
+
+  async function pushToGist() {
+    if (!gistToken.trim()) {
+      gistStatus = 'Set a GitHub token first.';
+      return;
+    }
+    const payload = {
+      description: 'Aire workspace backup',
+      public: false,
+      files: {
+        'aire-backup.json': {
+          content: JSON.stringify({
+            exportedAt: Date.now(),
+            state: $appStore,
+          }, null, 2),
+        },
+      },
+    };
+    const endpoint = gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists';
+    const method = gistId ? 'PATCH' : 'POST';
+    const response = await fetch(endpoint, {
+      method,
+      headers: {
+        Authorization: `token ${gistToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      gistStatus = 'Sync failed while pushing.';
+      return;
+    }
+    const data = await response.json();
+    gistId = data.id;
+    gistStatus = `Pushed successfully (gist: ${data.id}).`;
+  }
+
+  async function pullFromGist() {
+    if (!gistToken.trim() || !gistId.trim()) {
+      gistStatus = 'Provide token and gist id.';
+      return;
+    }
+    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: { Authorization: `token ${gistToken}` },
+    });
+    if (!response.ok) {
+      gistStatus = 'Sync failed while pulling.';
+      return;
+    }
+    const data = await response.json();
+    const file = data.files?.['aire-backup.json'];
+    if (!file?.content) {
+      gistStatus = 'Backup file not found in gist.';
+      return;
+    }
+    const parsed = JSON.parse(file.content);
+    localStorage.setItem('aire-v1', JSON.stringify(parsed.state));
+    location.reload();
+  }
   
   function handleDeleteDocument(id: string) {
     showDeleteConfirm = null;
@@ -688,6 +903,21 @@
         openPalette();
       }
     }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      showSearchPanel = !showSearchPanel;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      wrapSelection('**');
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      wrapSelection('*');
+    }
   }
   
   onMount(() => {
@@ -709,7 +939,7 @@
   <header class="header">
     <div class="tabs-container">
       <div class="tabs-scroll no-scrollbar">
-        {#each $appStore.documents as doc (doc.id)}
+        {#each visibleDocuments as doc (doc.id)}
           <div 
             class="tab-wrapper animate-slide-in"
             class:active={doc.id === $appStore.activeDocumentId}
@@ -752,9 +982,44 @@
     </div>
     
     <div class="header-actions">
+      <select class="workspace-select" value={$appStore.activeWorkspaceId} on:change={handleWorkspaceChange}>
+        {#each $appStore.workspaces as workspace}
+          <option value={workspace.id}>{workspace.name}</option>
+        {/each}
+      </select>
+      <button class="btn btn-icon animate-fade-in" on:click={createWorkspace} title="Create workspace">
+        <Plus size={16} />
+      </button>
+      <input bind:value={workspaceNameDraft} class="workspace-input" placeholder="Workspace name" />
+
       <button class="btn btn-icon animate-fade-in" class:active-accent={$appStore.wordWrap} on:click={() => appStore.toggleWordWrap()} title="Toggle word wrap (Ctrl+W)">
         <WrapText size={18} />
       </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => (showSearchPanel = !showSearchPanel)} title="Global search">
+        <Search size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => (showHistoryPanel = !showHistoryPanel)} title="Document history">
+        <History size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => (showSyncPanel = !showSyncPanel)} title="Sync settings">
+        <Cloud size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={handleExportHtml} title="Export HTML">
+        <FileDown size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={handleExportPdf} title="Export PDF">
+        <FileUp size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => importInputEl?.click()} title="Import markdown files">
+        <Upload size={18} />
+      </button>
+      <input bind:this={importInputEl} type="file" accept=".md,text/markdown" multiple hidden on:change={handleImportFiles} />
       
       <button class="btn btn-icon animate-fade-in" class:flash-accent={flashFormat} on:click={handleFormatTables} title="Format tables in this document">
         <Edit3 size={18} />
@@ -778,6 +1043,15 @@
   <div class="workspace">
     <!-- Editor Pane -->
     <section class="editor-pane" style="width: {sidebarWidth}%">
+      <div class="format-toolbar">
+        <button class="toolbar-btn" on:click={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('`')} title="Inline code"><Code size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('[', '](https://example.com)', 'label')} title="Link"><Link size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n## ', '', 'Heading')} title="Heading"><Heading size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n- ', '', 'List item')} title="List"><List size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n> ', '', 'Quote')} title="Quote"><Quote size={14} /></button>
+      </div>
       <div class="editor-container">
         <!-- Line Numbers -->
         <div class="line-numbers" bind:this={lineNumbersEl}>
@@ -799,6 +1073,13 @@
           on:click={handleSelectionChange}
           on:keyup={handleSelectionChange}
           on:select={handleSelectionChange}
+          on:dragover={(e) => {
+            e.preventDefault();
+            isEditorDragOver = true;
+          }}
+          on:dragleave={() => (isEditorDragOver = false)}
+          on:drop={handleDropImport}
+          class:drag-over={isEditorDragOver}
           placeholder="# Start writing your masterpiece...&#10;&#10;This editor supports full GitHub Flavored Markdown:&#10;- **Bold** and *italic* text&#10;- [Links](https://example.com)&#10;- `inline code` and code blocks&#10;- Tables, task lists, footnotes, callouts, and math ($...$, $$...$$)!"
           spellcheck="false"
         ></textarea>
@@ -903,6 +1184,56 @@
   </div>
 {/if}
 
+{#if showSearchPanel}
+  <div class="floating-panel">
+    <h3>Global search</h3>
+    <input class="panel-input" bind:value={searchQuery} placeholder="Search in all documents" />
+    <input class="panel-input" bind:value={replaceQuery} placeholder="Replace with" />
+    <button class="btn" on:click={handleReplaceAll}>Replace all</button>
+    <div class="search-list">
+      {#each searchResults as result}
+        <button class="palette-item" on:click={() => jumpToSearchResult(result.id)}>
+          <div class="palette-title">{result.name}</div>
+          <div class="palette-desc">{result.workspace} • {result.matches} matches</div>
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
+{#if showHistoryPanel}
+  <div class="floating-panel right">
+    <h3>Version history</h3>
+    {#if !currentDoc}
+      <p class="palette-desc">No active document.</p>
+    {:else if documentHistory.length === 0}
+      <p class="palette-desc">No snapshots yet.</p>
+    {:else}
+      {#each documentHistory as snapshot, reverseIdx}
+        <button class="palette-item" on:click={() => appStore.restoreDocumentVersion(currentDoc.id, documentHistory.length - reverseIdx - 1)}>
+          <div class="palette-title">{new Date(snapshot.timestamp).toLocaleString()}</div>
+          <div class="palette-desc">Restore this version</div>
+        </button>
+      {/each}
+    {/if}
+  </div>
+{/if}
+
+{#if showSyncPanel}
+  <div class="floating-panel sync">
+    <h3>Optional sync (GitHub Gist)</h3>
+    <input class="panel-input" bind:value={gistToken} type="password" placeholder="GitHub token" />
+    <input class="panel-input" bind:value={gistId} placeholder="Gist ID (optional for first push)" />
+    <div class="sync-actions">
+      <button class="btn" on:click={pushToGist}>Push</button>
+      <button class="btn" on:click={pullFromGist}>Pull</button>
+    </div>
+    {#if gistStatus}
+      <p class="palette-desc">{gistStatus}</p>
+    {/if}
+  </div>
+{/if}
+
 <style>
   .app-container {
     display: flex;
@@ -990,6 +1321,21 @@
     padding-left: 8px;
     border-left: 1px solid var(--border-subtle);
   }
+
+  .workspace-select,
+  .workspace-input,
+  .panel-input {
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
+  .workspace-input {
+    width: 130px;
+  }
   
   /* Workspace */
   .workspace {
@@ -1009,6 +1355,26 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+  }
+
+  .format-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-app);
+  }
+
+  .toolbar-btn {
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .line-numbers {
@@ -1041,6 +1407,10 @@
   
   .editor-textarea::placeholder {
     color: var(--text-tertiary);
+  }
+
+  .editor-textarea.drag-over {
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
   }
 
   .editor-textarea.word-wrap-enabled {
@@ -1221,6 +1591,39 @@
   .palette-empty {
     padding: 16px;
     color: var(--text-secondary);
+  }
+
+  .floating-panel {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    width: min(420px, 92vw);
+    max-height: 72vh;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+    z-index: 22;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .floating-panel.right {
+    left: auto;
+    right: 16px;
+  }
+
+  .search-list {
+    max-height: 320px;
+    overflow: auto;
+  }
+
+  .sync-actions {
+    display: flex;
+    gap: 8px;
   }
 
   /* Tables */
