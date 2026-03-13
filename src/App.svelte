@@ -16,7 +16,17 @@
     MoreVertical,
     Edit3,
     Github,
-    WrapText
+    WrapText,
+    Search,
+    Upload,
+    History,
+    Bold,
+    Italic,
+    Code,
+    Link,
+    Heading,
+    List,
+    Quote
   } from 'lucide-svelte';
   import { appStore, activeDocument } from './stores';
   import type { Document } from './stores';
@@ -191,18 +201,38 @@
   let filteredCommands: PaletteCommand[] = [];
   let paletteInputEl: HTMLInputElement | null = null;
   let flashFormat = false;
-  let flashDownload = false;
   let selectionLength = 0;
   let caretLine = 1;
   let caretCol = 1;
   let flashCopyStats = false;
+  let showSearchPanel = false;
+  let searchQuery = '';
+  let replaceQuery = '';
+  let showHistoryPanel = false;
+  let showExportMenu = false;
+  let importInputEl: HTMLInputElement | null = null;
+  let workspaceNameDraft = '';
+  let isEditorDragOver = false;
 
   const editorStateByDoc = new Map<string, { selectionStart: number; selectionEnd: number; scrollTop: number }>();
   const previewScrollByDoc = new Map<string, number>();
   
   $: currentDoc = $activeDocument;
+  $: visibleDocuments = $appStore.documents.filter((doc) => doc.workspaceId === $appStore.activeWorkspaceId);
+  $: activeWorkspace = $appStore.workspaces.find((workspace) => workspace.id === $appStore.activeWorkspaceId) || null;
   $: renderedMarkdown = currentDoc ? marked.parse(currentDoc.content) : '';
   $: lineCount = currentDoc ? currentDoc.content.split('\n').length : 1;
+  $: documentHistory = currentDoc ? (($appStore.historyByDoc[currentDoc.id] || []).slice().reverse()) : [];
+  $: searchResults = searchQuery.trim()
+    ? $appStore.documents
+        .filter((doc) => doc.content.toLowerCase().includes(searchQuery.toLowerCase()) || doc.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          workspace: $appStore.workspaces.find((workspace) => workspace.id === doc.workspaceId)?.name || 'Unknown',
+          matches: (doc.content.match(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length,
+        }))
+    : [];
   $: 
     if ($appStore) {
       sidebarWidth = $appStore.sidebarWidth;
@@ -255,7 +285,16 @@
     { id: 'toggle-theme', label: 'Toggle theme', desc: 'Light/Dark', run: () => appStore.toggleTheme() },
     { id: 'toggle-wrap', label: 'Toggle word wrap', desc: 'Wrap editor lines', run: () => appStore.toggleWordWrap() },
     { id: 'focus-editor', label: 'Focus editor', desc: 'Move caret to editor', run: () => editorTextarea?.focus() },
+    { id: 'search', label: 'Global search', desc: 'Search across documents', run: () => (showSearchPanel = true) },
+    { id: 'history', label: 'Version history', desc: 'Restore previous snapshots', run: () => (showHistoryPanel = true) },
+    { id: 'export-markdown', label: 'Export Markdown', desc: 'Save as .md', run: handleDownload },
+    { id: 'export-html', label: 'Export HTML', desc: 'Save rendered document as HTML', run: handleExportHtml },
+    { id: 'export-pdf', label: 'Export PDF', desc: 'Print rendered document to PDF', run: handleExportPdf },
   ];
+
+  function escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 
   // Palette helpers
   function openPalette() {
@@ -600,10 +639,132 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     announce(`Document ${currentDoc.name} downloaded`);
-    flashDownload = true;
-    setTimeout(() => (flashDownload = false), 420);
   }
-  
+
+  function buildExportHtml(content: string, title: string) {
+    const previewHtml = marked.parse(content);
+    return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title><style>body{font-family:Inter,system-ui,sans-serif;margin:2rem;color:#111}main{max-width:860px;margin:0 auto}pre{background:#f4f4f4;padding:1rem;border-radius:8px;overflow:auto}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.5rem}.callout{border-left:4px solid #4f46e5;padding:.75rem 1rem;background:#f8f8ff}@media print{body{margin:0.5in}}</style></head><body><main>${previewHtml}</main></body></html>`;
+  }
+
+  function handleExportHtml() {
+    if (!currentDoc) return;
+    const html = buildExportHtml(currentDoc.content, currentDoc.name);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentDoc.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    announce('HTML exported');
+  }
+
+  function handleExportPdf() {
+    if (!currentDoc) return;
+    const html = buildExportHtml(currentDoc.content, currentDoc.name);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 200);
+    announce('PDF export opened');
+  }
+
+  function handleExportOption(format: 'md' | 'html' | 'pdf') {
+    showExportMenu = false;
+    if (format === 'md') {
+      handleDownload();
+      return;
+    }
+    if (format === 'html') {
+      handleExportHtml();
+      return;
+    }
+    handleExportPdf();
+  }
+
+  function handleReplaceAll() {
+    if (!searchQuery.trim()) return;
+    const regex = new RegExp(escapeRegExp(searchQuery), 'gi');
+    for (const doc of $appStore.documents) {
+      if (!doc.content.match(regex)) continue;
+      appStore.updateDocumentContent(doc.id, doc.content.replace(regex, replaceQuery));
+    }
+    announce('Replace applied across documents');
+  }
+
+  function jumpToSearchResult(docId: string) {
+    const target = $appStore.documents.find((doc) => doc.id === docId);
+    if (!target) return;
+    appStore.setActiveWorkspace(target.workspaceId);
+    appStore.setActiveDocument(target.id);
+    showSearchPanel = false;
+  }
+
+  function wrapSelection(prefix: string, suffix = prefix, placeholder = 'text') {
+    if (!currentDoc || !editorTextarea) return;
+    const start = editorTextarea.selectionStart ?? 0;
+    const end = editorTextarea.selectionEnd ?? 0;
+    const selected = currentDoc.content.slice(start, end) || placeholder;
+    const updated = `${currentDoc.content.slice(0, start)}${prefix}${selected}${suffix}${currentDoc.content.slice(end)}`;
+    appStore.updateDocumentContent(currentDoc.id, updated);
+    tick().then(() => {
+      const newStart = start + prefix.length;
+      const newEnd = newStart + selected.length;
+      editorTextarea.focus();
+      editorTextarea.selectionStart = newStart;
+      editorTextarea.selectionEnd = newEnd;
+      handleSelectionChange();
+    });
+  }
+
+  function handleImportFiles(e: Event) {
+    const input = e.target as HTMLInputElement | null;
+    const files = Array.from(input?.files || []);
+    if (files.length === 0) return;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        appStore.createDocument(file.name.replace(/\.md$/i, ''), String(reader.result || ''));
+      };
+      reader.readAsText(file);
+    });
+    if (input) input.value = '';
+    announce(`${files.length} file(s) imported`);
+  }
+
+  function handleDropImport(e: DragEvent) {
+    e.preventDefault();
+    isEditorDragOver = false;
+    const files = Array.from(e.dataTransfer?.files || []).filter((file) => file.name.toLowerCase().endsWith('.md'));
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        appStore.createDocument(file.name.replace(/\.md$/i, ''), String(reader.result || ''));
+      };
+      reader.readAsText(file);
+    });
+    if (files.length > 0) announce(`${files.length} markdown file(s) imported`);
+  }
+
+  function createWorkspace() {
+    const name = workspaceNameDraft.trim() || `Workspace ${$appStore.workspaces.length + 1}`;
+    appStore.createWorkspace(name);
+    workspaceNameDraft = '';
+    announce(`Workspace ${name} created`);
+  }
+
+  function handleWorkspaceChange(e: Event) {
+    const target = e.target as HTMLSelectElement | null;
+    if (!target) return;
+    appStore.setActiveWorkspace(target.value);
+  }
+
   function handleDeleteDocument(id: string) {
     showDeleteConfirm = null;
     appStore.deleteDocument(id);
@@ -655,6 +816,12 @@
   
   // Keyboard shortcuts
   function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      showExportMenu = false;
+      showSearchPanel = false;
+      showHistoryPanel = false;
+    }
+
     // Ctrl/Cmd + N: New document
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
       e.preventDefault();
@@ -688,17 +855,42 @@
         openPalette();
       }
     }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      showSearchPanel = !showSearchPanel;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      wrapSelection('**');
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      wrapSelection('*');
+    }
+  }
+
+  function handleWindowClick(e: MouseEvent) {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (!target.closest('.export-wrap')) {
+      showExportMenu = false;
+    }
   }
   
   onMount(() => {
     window.addEventListener('mousemove', handleResizing);
     window.addEventListener('mouseup', stopResizing);
     window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('mousedown', handleWindowClick);
     
     return () => {
       window.removeEventListener('mousemove', handleResizing);
       window.removeEventListener('mouseup', stopResizing);
       window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('mousedown', handleWindowClick);
     };
   });
 </script>
@@ -709,7 +901,7 @@
   <header class="header">
     <div class="tabs-container">
       <div class="tabs-scroll no-scrollbar">
-        {#each $appStore.documents as doc (doc.id)}
+        {#each visibleDocuments as doc (doc.id)}
           <div 
             class="tab-wrapper animate-slide-in"
             class:active={doc.id === $appStore.activeDocumentId}
@@ -752,16 +944,48 @@
     </div>
     
     <div class="header-actions">
+      <select class="workspace-select" value={$appStore.activeWorkspaceId} on:change={handleWorkspaceChange}>
+        {#each $appStore.workspaces as workspace}
+          <option value={workspace.id}>{workspace.name}</option>
+        {/each}
+      </select>
+      <button class="btn btn-icon animate-fade-in" on:click={createWorkspace} title="Create workspace">
+        <Plus size={16} />
+      </button>
+      <input bind:value={workspaceNameDraft} class="workspace-input" placeholder="Workspace name" />
+
       <button class="btn btn-icon animate-fade-in" class:active-accent={$appStore.wordWrap} on:click={() => appStore.toggleWordWrap()} title="Toggle word wrap (Ctrl+W)">
         <WrapText size={18} />
       </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => (showSearchPanel = !showSearchPanel)} title="Global search">
+        <Search size={18} />
+      </button>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => (showHistoryPanel = !showHistoryPanel)} title="Document history">
+        <History size={18} />
+      </button>
+
+      <div class="export-wrap">
+        <button class="btn btn-icon animate-fade-in" on:click={() => (showExportMenu = !showExportMenu)} title="Export options">
+          <Download size={18} />
+        </button>
+        {#if showExportMenu}
+          <div class="export-menu">
+            <button class="export-item" on:click={() => handleExportOption('md')}>Export Markdown (.md)</button>
+            <button class="export-item" on:click={() => handleExportOption('html')}>Export HTML (.html)</button>
+            <button class="export-item" on:click={() => handleExportOption('pdf')}>Export PDF</button>
+          </div>
+        {/if}
+      </div>
+
+      <button class="btn btn-icon animate-fade-in" on:click={() => importInputEl?.click()} title="Import markdown files">
+        <Upload size={18} />
+      </button>
+      <input bind:this={importInputEl} type="file" accept=".md,text/markdown" multiple hidden on:change={handleImportFiles} />
       
       <button class="btn btn-icon animate-fade-in" class:flash-accent={flashFormat} on:click={handleFormatTables} title="Format tables in this document">
         <Edit3 size={18} />
-      </button>
-      
-      <button class="btn btn-icon animate-fade-in" class:flash-accent={flashDownload} on:click={handleDownload} title="Download markdown (Ctrl+S)">
-        <Download size={18} />
       </button>
       
       <button class="btn btn-icon animate-fade-in" on:click={() => appStore.toggleTheme()} title="Toggle theme (Ctrl+D)">
@@ -778,6 +1002,15 @@
   <div class="workspace">
     <!-- Editor Pane -->
     <section class="editor-pane" style="width: {sidebarWidth}%">
+      <div class="format-toolbar">
+        <button class="toolbar-btn" on:click={() => wrapSelection('**')} title="Bold"><Bold size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('*')} title="Italic"><Italic size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('`')} title="Inline code"><Code size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('[', '](https://example.com)', 'label')} title="Link"><Link size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n## ', '', 'Heading')} title="Heading"><Heading size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n- ', '', 'List item')} title="List"><List size={14} /></button>
+        <button class="toolbar-btn" on:click={() => wrapSelection('\n> ', '', 'Quote')} title="Quote"><Quote size={14} /></button>
+      </div>
       <div class="editor-container">
         <!-- Line Numbers -->
         <div class="line-numbers" bind:this={lineNumbersEl}>
@@ -799,6 +1032,13 @@
           on:click={handleSelectionChange}
           on:keyup={handleSelectionChange}
           on:select={handleSelectionChange}
+          on:dragover={(e) => {
+            e.preventDefault();
+            isEditorDragOver = true;
+          }}
+          on:dragleave={() => (isEditorDragOver = false)}
+          on:drop={handleDropImport}
+          class:drag-over={isEditorDragOver}
           placeholder="# Start writing your masterpiece...&#10;&#10;This editor supports full GitHub Flavored Markdown:&#10;- **Bold** and *italic* text&#10;- [Links](https://example.com)&#10;- `inline code` and code blocks&#10;- Tables, task lists, footnotes, callouts, and math ($...$, $$...$$)!"
           spellcheck="false"
         ></textarea>
@@ -903,6 +1143,41 @@
   </div>
 {/if}
 
+{#if showSearchPanel}
+  <div class="floating-panel">
+    <h3>Global search</h3>
+    <input class="panel-input" bind:value={searchQuery} placeholder="Search in all documents" />
+    <input class="panel-input" bind:value={replaceQuery} placeholder="Replace with" />
+    <button class="btn" on:click={handleReplaceAll}>Replace all</button>
+    <div class="search-list">
+      {#each searchResults as result}
+        <button class="palette-item" on:click={() => jumpToSearchResult(result.id)}>
+          <div class="palette-title">{result.name}</div>
+          <div class="palette-desc">{result.workspace} • {result.matches} matches</div>
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
+{#if showHistoryPanel}
+  <div class="floating-panel right">
+    <h3>Version history</h3>
+    {#if !currentDoc}
+      <p class="palette-desc">No active document.</p>
+    {:else if documentHistory.length === 0}
+      <p class="palette-desc">No snapshots yet.</p>
+    {:else}
+      {#each documentHistory as snapshot, reverseIdx}
+        <button class="palette-item" on:click={() => appStore.restoreDocumentVersion(currentDoc.id, documentHistory.length - reverseIdx - 1)}>
+          <div class="palette-title">{new Date(snapshot.timestamp).toLocaleString()}</div>
+          <div class="palette-desc">Restore this version</div>
+        </button>
+      {/each}
+    {/if}
+  </div>
+{/if}
+
 <style>
   .app-container {
     display: flex;
@@ -986,9 +1261,58 @@
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding-left: 8px;
+    gap: 6px;
+    padding-left: 10px;
     border-left: 1px solid var(--border-subtle);
+    position: relative;
+  }
+
+  .workspace-select,
+  .workspace-input,
+  .panel-input {
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
+  .workspace-input {
+    width: 130px;
+  }
+
+  .export-wrap {
+    position: relative;
+  }
+
+  .export-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    z-index: 30;
+  }
+
+  .export-item {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 0.65rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background var(--transition-fast);
+  }
+
+  .export-item:hover {
+    background: var(--bg-hover);
   }
   
   /* Workspace */
@@ -1009,6 +1333,34 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+  }
+
+  .format-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-app);
+    flex-wrap: wrap;
+  }
+
+  .toolbar-btn {
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+  }
+
+  .toolbar-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-surface));
   }
   
   .line-numbers {
@@ -1041,6 +1393,10 @@
   
   .editor-textarea::placeholder {
     color: var(--text-tertiary);
+  }
+
+  .editor-textarea.drag-over {
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
   }
 
   .editor-textarea.word-wrap-enabled {
@@ -1221,6 +1577,39 @@
   .palette-empty {
     padding: 16px;
     color: var(--text-secondary);
+  }
+
+  .floating-panel {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    width: min(420px, 92vw);
+    max-height: 72vh;
+    overflow: auto;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+    z-index: 22;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .floating-panel h3 {
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .floating-panel.right {
+    left: auto;
+    right: 16px;
+  }
+
+  .search-list {
+    max-height: 320px;
+    overflow: auto;
   }
 
   /* Tables */
